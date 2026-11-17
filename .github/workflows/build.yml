@@ -35,24 +35,6 @@ jobs:
         shell: powershell
         run: |
           Write-Host 'Starting the process smoke test.'
-          $diagBatch = Join-Path $env:TEMP 'server-console-hidden-diagnostic.bat'
-          [System.IO.File]::WriteAllText($diagBatch, '@echo off' + [Environment]::NewLine + 'echo HIDDEN-START' + [Environment]::NewLine + 'set /p incoming=' + [Environment]::NewLine + 'if "%incoming%"=="PING" exit /b 0' + [Environment]::NewLine + 'exit /b 1' + [Environment]::NewLine, [System.Text.Encoding]::ASCII)
-          $batchInfo = New-Object System.Diagnostics.ProcessStartInfo
-          $batchInfo.FileName = $env:ComSpec
-          $batchInfo.Arguments = '/d /c call "' + $diagBatch + '"'
-          $batchInfo.WorkingDirectory = $env:TEMP
-          $batchInfo.UseShellExecute = $false
-          $batchInfo.CreateNoWindow = $false
-          $batchInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
-          $batchInfo.RedirectStandardInput = $true
-          $batchInfo.RedirectStandardOutput = $true
-          $batchInfo.RedirectStandardError = $true
-          $batchProcess = [System.Diagnostics.Process]::Start($batchInfo)
-          $batchProcess.StandardInput.WriteLine('PING')
-          $batchOut = $batchProcess.StandardOutput.ReadToEnd()
-          $batchErr = $batchProcess.StandardError.ReadToEnd()
-          $batchProcess.WaitForExit()
-          Write-Host ('Hidden batch diagnostic exit=' + $batchProcess.ExitCode + ' out=' + $batchOut + ' err=' + $batchErr)
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\ServerConsole.ps1 -SelfTest *> smoke-test.log
           $testExitCode = $LASTEXITCODE
           Get-Content .\smoke-test.log
