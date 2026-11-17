@@ -11,6 +11,7 @@ When you double-click **run.bat** after installation, it opens a dark window wit
 - Lets you type Minecraft server commands and send them to the running server.
 - Sends the normal stop command when you press Stop Server.
 - Keeps the original launcher backed up as **run-server.bat**.
+- Uses a tiny startup handshake so the console's command input is connected before the server starts.
 - Does not patch Minecraft, install a mod, or change server files.
 
 ## Install
