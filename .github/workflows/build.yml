@@ -46,7 +46,7 @@ jobs:
         shell: powershell
         run: |
           New-Item -ItemType Directory -Path build -Force | Out-Null
-          Compress-Archive -Path INSTALL.bat,RUN-CONSOLE.bat,ServerConsole.ps1,RESTORE-ORIGINAL-RUN.bat,README.md -DestinationPath build\server-console-package.zip -Force
+          Compress-Archive -Path INSTALL.bat,RUN-CONSOLE.bat,SERVER-CONSOLE-BOOTSTRAP.bat,ServerConsole.ps1,RESTORE-ORIGINAL-RUN.bat,README.md -DestinationPath build\server-console-package.zip -Force
           if ((Get-Item build\server-console-package.zip).Length -lt 1000) {
             throw "The package ZIP is unexpectedly small."
           }
