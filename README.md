@@ -1,6 +1,6 @@
 # Server Dark Console
 
-A standalone dark Minecraft server console window for Windows. It is not a Minecraft mod and does not use a JAR.
+A standalone, portable dark Minecraft server console window for Windows. It is not a Minecraft mod and does not use a JAR.
 
 When you double-click **run.bat** after installation, it opens a dark window with green server output, a command input box, a Send button, and a Stop Server button.
 
