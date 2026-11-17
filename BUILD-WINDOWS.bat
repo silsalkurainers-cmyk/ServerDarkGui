@@ -28,7 +28,7 @@ mkdir build\deps
 mkdir build\classes
 
 echo Downloading the Mixin compile-time API...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -Uri 'https://repo.maven.apache.org/maven2/net/fabricmc/sponge-mixin/0.17.3%%2Bmixin.0.8.7/sponge-mixin-0.17.3%%2Bmixin.0.8.7.jar' -OutFile 'build\deps\sponge-mixin.jar'"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -Uri 'https://repo.maven.apache.org/maven2/net/fabricmc/sponge-mixin/0.17.3+mixin.0.8.7/sponge-mixin-0.17.3+mixin.0.8.7.jar' -OutFile 'build\deps\sponge-mixin.jar'"
 if errorlevel 1 (
     echo ERROR: Could not download the Mixin compile-time API.
     exit /b 1
