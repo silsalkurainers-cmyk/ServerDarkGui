@@ -71,6 +71,10 @@ if ($SelfTest) {
         Write-Output 'PASS: batch launch, stdout, stderr, and command input all work.'
         exit 0
     }
+    catch {
+        Write-Output ('SELFTEST ERROR: ' + $_.Exception.ToString())
+        throw
+    }
     finally {
         if ($null -ne $testProcess) { $testProcess.Dispose() }
         Remove-Item -LiteralPath $testFolder -Recurse -Force -ErrorAction SilentlyContinue
