@@ -1,11 +1,9 @@
-name: Build Server Dark GUI
+name: Build Server Console Package
 
 on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
   pull_request:
     branches:
       - main
@@ -15,57 +13,61 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  package:
+    runs-on: windows-latest
     steps:
-      - name: Check out source
+      - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-
-      - name: Download the Mixin compile-time API
+      - name: Validate PowerShell syntax
+        shell: powershell
         run: |
-          mkdir -p build/deps
-          curl --fail --location --retry 3 \
-            "https://repo.maven.apache.org/maven2/net/fabricmc/sponge-mixin/0.17.3%2Bmixin.0.8.7/sponge-mixin-0.17.3%2Bmixin.0.8.7.jar" \
-            --output build/deps/sponge-mixin.jar
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path .\ServerConsole.ps1), [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_ }
+            exit 1
+          }
+          Write-Host "PowerShell syntax is valid."
 
-      - name: Compile and package the mod
+      - name: Smoke test batch process, output streams, and command input
+        shell: powershell
         run: |
-          mkdir -p build/classes
-          find src/main/java -name "*.java" -print > build/sources.txt
-          javac --release 21 -proc:none -encoding UTF-8 \
-            -classpath build/deps/sponge-mixin.jar \
-            -d build/classes @build/sources.txt
-          cp -R src/main/resources/. build/classes/
-          jar --create --file build/server-dark-gui-1.0.0.jar -C build/classes .
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\ServerConsole.ps1 -SelfTest
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
 
-      - name: Upload the JAR
+      - name: Create portable package
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Path build -Force | Out-Null
+          Compress-Archive -Path INSTALL.bat,RUN-CONSOLE.bat,ServerConsole.ps1,RESTORE-ORIGINAL-RUN.bat,README.md -DestinationPath build\server-console-package.zip -Force
+          if ((Get-Item build\server-console-package.zip).Length -lt 1000) {
+            throw "The package ZIP is unexpectedly small."
+          }
+
+      - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:
-          name: server-dark-gui-1.0.0
-          path: build/server-dark-gui-1.0.0.jar
+          name: server-console-package
+          path: build/server-console-package.zip
           if-no-files-found: error
 
-      - name: Publish direct JAR download
+      - name: Publish latest GitHub Release package
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: powershell
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}
         run: |
-          if ! gh release view latest >/dev/null 2>&1; then
-            gh release create latest \
-              --title "Latest Server Dark GUI build" \
-              --notes "Automatically updated with the latest successful build from the main branch." \
-              --prerelease
-          fi
-          gh release upload latest build/server-dark-gui-1.0.0.jar --clobber
-
-      - name: Publish GitHub Release for version tags
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: build/server-dark-gui-1.0.0.jar
+          gh auth status
+          if (-not (gh release view latest 2>$null)) {
+            gh release create latest --title "Latest Server Dark Console" --notes "Portable Windows server console package. No Gradle or external runtime dependencies."
+          }
+          gh release upload latest build/server-console-package.zip --clobber
+          gh release delete-asset latest server-dark-gui-1.0.0.jar --yes
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Old mod JAR was not present or could not be removed."
+            $global:LASTEXITCODE = 0
+          }
