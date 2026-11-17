@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "com.hacer62828.serverdarkgui.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "MinecraftServerGuiMixin",
+    "StatsComponentMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
