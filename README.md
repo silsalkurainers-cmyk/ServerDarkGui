@@ -1,49 +1,37 @@
-# Server Dark GUI
+# Server Dark Console
 
-A server-side Fabric mod that themes Minecraft's built-in dedicated-server Swing window with near-black panels and green text.
+A standalone dark Minecraft server console window for Windows. It is not a Minecraft mod and does not use a JAR.
 
-## What it changes
+When you double-click **run.bat** after installation, it opens a dark window with green server output, a command input box, a Send button, and a Stop Server button.
 
-- Near-black backgrounds for the built-in server window.
-- Green text, selection colors, labels, and controls.
-- A best-effort recolor of the built-in statistics graph.
-- Keeps Minecraft's existing Stats, Players, and Log/chat interface.
+## What it does
 
-This changes the actual Minecraft server window. It does not recolor the Command Prompt or terminal.
-
-## Requirements
-
-- Minecraft Java Edition **26.2**
-- Fabric Loader **0.19.3 or newer**
-- Java **25 or newer** to run the server
-- The normal server GUI must be enabled. Do not start the server with the `nogui` argument.
+- Starts your existing server launcher, preserving its Java command, memory settings, Fabric arguments, and other options.
+- Shows live standard output and error output in a dark window.
+- Lets you type Minecraft server commands and send them to the running server.
+- Sends the normal stop command when you press Stop Server.
+- Keeps the original launcher backed up as **run-server.bat**.
+- Does not patch Minecraft, install a mod, or change server files.
 
 ## Install
 
-1. Install Fabric on the Minecraft 26.2 dedicated server.
-2. Put `server-dark-gui-1.0.0.jar` in the server's `mods` folder.
-3. Start the server without `nogui`.
+1. Download **server-console-package.zip** from the latest GitHub Release.
+2. Extract the ZIP directly into the same folder as your current server **run.bat**. Do not extract it into a separate subfolder.
+3. Double-click **INSTALL.bat** once and let it finish.
+4. Double-click the new **run.bat** whenever you want to start the server.
 
-## Build on Windows
+The installer renames your original launcher to **run-server.bat** and installs a small wrapper as the new **run.bat**. The console runs **run-server.bat** from the server directory, so relative paths and your existing server files remain in place.
 
-A JDK **21 or newer** is required. Open the project folder in Command Prompt and run:
+To restore the original launcher, close the server and run **RESTORE-ORIGINAL-RUN.bat**.
 
-```cmd
-BUILD-WINDOWS.bat
-```
+## Requirements
 
-The script uses only the JDK's `javac` and `jar` tools plus Windows PowerShell to download the compile-time Mixin API. No Gradle, Maven build tool, or wrapper is used.
+- Windows 10 or Windows 11.
+- Windows PowerShell 5.1 and the Windows .NET Framework components already included with Windows.
+- Java, as already required by your Minecraft server.
 
-The output is:
+There is no Gradle, Maven, JDK, Fabric dependency, third-party library, or separate application runtime to install. The console itself is a PowerShell/Windows Forms script using built-in Windows components. Java is still required to run Minecraft.
 
-```
-build\server-dark-gui-1.0.0.jar
-```
+## Verification
 
-## Automatic GitHub build
-
-Every push to `main` runs the same direct Java compilation in GitHub Actions. The resulting JAR is attached to the workflow run as an artifact. Pushing a version tag such as `v1.0.0` also publishes a GitHub Release containing the JAR.
-
-## Compatibility note
-
-The build checks that the Java source compiles and packages correctly. The mixin hooks still need to be tested in an actual Minecraft 26.2 Fabric dedicated-server session.
+The GitHub Actions workflow checks the PowerShell script syntax and runs a Windows smoke test that launches a test batch file, captures stdout and stderr, and sends a command through standard input. This verifies the process-connection layer used by the console. It cannot replace testing on your exact server folder and server startup script.
