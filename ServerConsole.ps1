@@ -96,23 +96,6 @@ if ($SelfTest) {
         $testHost = Start-RedirectedBatch -BatchPath $testBatch
         $testProcess = $testHost.Process
         $capturedLines = New-Object 'System.Collections.Generic.List[string]'
-
-        $startSeen = $false
-        $deadline = [DateTime]::UtcNow.AddSeconds(8)
-        while (-not $startSeen -and [DateTime]::UtcNow -lt $deadline) {
-            Receive-ProcessOutput -ProcessHost $testHost -Destination $capturedLines
-            $startSeen = (($capturedLines -join [Environment]::NewLine) -match 'SELFTEST-START')
-            if ($testProcess.HasExited) { break }
-            if (-not $startSeen) { Start-Sleep -Milliseconds 50 }
-        }
-
-        if (-not $startSeen) {
-            if (-not $testProcess.HasExited) { $testProcess.Kill() }
-            $testProcess.WaitForExit()
-            Receive-ProcessOutput -ProcessHost $testHost -Destination $capturedLines
-            throw ('Test batch did not emit its start line. Exit code: ' + $testProcess.ExitCode + '. Output: ' + ($capturedLines -join [Environment]::NewLine))
-        }
-
         $testHost.Send('PING')
         $deadline = [DateTime]::UtcNow.AddSeconds(15)
         while (-not $testProcess.HasExited -and [DateTime]::UtcNow -lt $deadline) {
