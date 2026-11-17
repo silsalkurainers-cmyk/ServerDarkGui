@@ -7,7 +7,7 @@ function Start-RedirectedBatch {
     $script:OutputQueue = New-Object 'System.Collections.Concurrent.ConcurrentQueue[string]'
     $startInfo = New-Object System.Diagnostics.ProcessStartInfo
     $startInfo.FileName = $env:ComSpec
-    $startInfo.Arguments = '/d /c call "' + $BatchPath + '"'
+    $startInfo.Arguments = '/d /s /c ""' + $BatchPath + '""'
     $startInfo.WorkingDirectory = Split-Path -Parent $BatchPath
     $startInfo.UseShellExecute = $false
     $startInfo.CreateNoWindow = $true
@@ -37,6 +37,7 @@ function Start-RedirectedBatch {
 if ($SelfTest) {
     $testFolder = Join-Path $env:TEMP ('ServerConsole-SmokeTest-' + [guid]::NewGuid().ToString('N'))
     [void](New-Item -ItemType Directory -Path $testFolder -Force)
+    Write-Output ('SELFTEST: folder=' + $testFolder)
     $testBatch = Join-Path $testFolder 'run-server.bat'
     $nl = [Environment]::NewLine
     $testContent = '@echo off' + $nl +
@@ -49,6 +50,7 @@ if ($SelfTest) {
     try {
         [System.IO.File]::WriteAllText($testBatch, $testContent, [System.Text.Encoding]::ASCII)
         $testProcess = Start-RedirectedBatch -BatchPath $testBatch
+        Write-Output ('SELFTEST: started process ' + $testProcess.Id)
         $testProcess.StandardInput.WriteLine('PING')
         $testProcess.StandardInput.Flush()
         if (-not $testProcess.WaitForExit(15000)) {
@@ -56,6 +58,7 @@ if ($SelfTest) {
             throw 'Smoke test timed out while waiting for the test server process.'
         }
         $testProcess.WaitForExit()
+        Write-Output ('SELFTEST: process exit code ' + $testProcess.ExitCode)
         $capturedLines = New-Object 'System.Collections.Generic.List[string]'
         [string]$capturedLine = $null
         while ($script:OutputQueue.TryDequeue([ref]$capturedLine)) {
@@ -63,6 +66,7 @@ if ($SelfTest) {
             $capturedLine = $null
         }
         $capturedText = $capturedLines -join [Environment]::NewLine
+        Write-Output ('SELFTEST: captured output: ' + $capturedText)
         if ($capturedText -notmatch 'SELFTEST-START' -or
             $capturedText -notmatch 'SELFTEST-COMMAND:PING' -or
             $capturedText -notmatch 'SELFTEST-STDERR') {
