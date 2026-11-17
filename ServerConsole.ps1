@@ -1,65 +1,84 @@
 param([switch]$SelfTest)
 $ErrorActionPreference = 'Stop'
-$script:StdoutReader = $null
-$script:StderrReader = $null
-$script:StdoutTask = $null
-$script:StderrTask = $null
+$script:ServerHost = $null
+$script:ServerProcess = $null
+$script:CloseWhenStopped = $false
+
+$processHostSource = @'
+using System;
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.IO;
+
+public sealed class ServerConsoleProcessHost
+{
+    private readonly Process process;
+    private readonly ConcurrentQueue<string> output;
+
+    public Process Process { get { return process; } }
+    public ConcurrentQueue<string> Output { get { return output; } }
+
+    public ServerConsoleProcessHost(string batchPath)
+    {
+        output = new ConcurrentQueue<string>();
+        ProcessStartInfo info = new ProcessStartInfo();
+        info.FileName = Environment.GetEnvironmentVariable("ComSpec");
+        info.Arguments = "/d /c call \"" + batchPath + "\"";
+        info.WorkingDirectory = Path.GetDirectoryName(batchPath);
+        info.UseShellExecute = false;
+        info.CreateNoWindow = true;
+        info.WindowStyle = ProcessWindowStyle.Hidden;
+        info.RedirectStandardInput = true;
+        info.RedirectStandardOutput = true;
+        info.RedirectStandardError = true;
+
+        process = new Process();
+        process.StartInfo = info;
+        process.OutputDataReceived += (sender, args) => { if (args.Data != null) output.Enqueue(args.Data); };
+        process.ErrorDataReceived += (sender, args) => { if (args.Data != null) output.Enqueue("[stderr] " + args.Data); };
+
+        if (!process.Start())
+            throw new InvalidOperationException("Windows could not start the server batch file.");
+
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+    }
+
+    public void Send(string command)
+    {
+        process.StandardInput.WriteLine(command);
+        process.StandardInput.Flush();
+    }
+
+    public void Dispose()
+    {
+        process.Dispose();
+    }
+}
+'@
+Add-Type -TypeDefinition $processHostSource -Language CSharp -ErrorAction Stop | Out-Null
 
 function Start-RedirectedBatch {
     param([Parameter(Mandatory = $true)][string]$BatchPath)
-
-    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
-    $startInfo.FileName = $env:ComSpec
-    $startInfo.Arguments = '/d /c call "' + $BatchPath + '"'
-    $startInfo.WorkingDirectory = Split-Path -Parent $BatchPath
-    $startInfo.UseShellExecute = $false
-    $startInfo.CreateNoWindow = $true
-    $startInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
-    $startInfo.RedirectStandardInput = $true
-    $startInfo.RedirectStandardOutput = $true
-    $startInfo.RedirectStandardError = $true
-
-    $process = New-Object System.Diagnostics.Process
-    $process.StartInfo = $startInfo
-    if (-not $process.Start()) { throw 'Windows could not start the server batch file.' }
-
-    $script:StdoutReader = $process.StandardOutput
-    $script:StderrReader = $process.StandardError
-    $script:StdoutTask = $script:StdoutReader.ReadLineAsync()
-    $script:StderrTask = $script:StderrReader.ReadLineAsync()
-    return $process
+    return [ServerConsoleProcessHost]::new($BatchPath)
 }
 
 function Receive-ProcessOutput {
-    param([Parameter(Mandatory = $true)][AllowEmptyCollection()][System.Collections.Generic.List[string]]$Destination)
+    param(
+        [Parameter(Mandatory = $true)][ServerConsoleProcessHost]$ProcessHost,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][System.Collections.Generic.List[string]]$Destination
+    )
 
-    if ($null -ne $script:StdoutTask -and $script:StdoutTask.IsCompleted) {
-        $line = $script:StdoutTask.GetAwaiter().GetResult()
-        if ($null -ne $line) {
-            $Destination.Add($line)
-            $script:StdoutTask = $script:StdoutReader.ReadLineAsync()
-        }
-        else {
-            $script:StdoutTask = $null
-        }
-    }
-
-    if ($null -ne $script:StderrTask -and $script:StderrTask.IsCompleted) {
-        $line = $script:StderrTask.GetAwaiter().GetResult()
-        if ($null -ne $line) {
-            $Destination.Add('[stderr] ' + $line)
-            $script:StderrTask = $script:StderrReader.ReadLineAsync()
-        }
-        else {
-            $script:StderrTask = $null
-        }
+    [string]$line = $null
+    while ($ProcessHost.Output.TryDequeue([ref]$line)) {
+        $Destination.Add($line)
+        $line = $null
     }
 }
 
 if ($SelfTest) {
     $testFolder = Join-Path $env:TEMP ('ServerConsole-SmokeTest-' + [guid]::NewGuid().ToString('N'))
     [void](New-Item -ItemType Directory -Path $testFolder -Force)
-    Write-Output ('SELFTEST: folder=' + $testFolder)
     $testBatch = Join-Path $testFolder 'run-server.bat'
     $nl = [Environment]::NewLine
     $testContent = '@echo off' + $nl +
@@ -68,40 +87,33 @@ if ($SelfTest) {
         'echo SELFTEST-COMMAND:%received%' + $nl +
         'echo SELFTEST-STDERR 1>&2' + $nl +
         'exit /b 0' + $nl
-    $testProcess = $null
+    $testHost = $null
     try {
         [System.IO.File]::WriteAllText($testBatch, $testContent, [System.Text.Encoding]::ASCII)
-        $testProcess = Start-RedirectedBatch -BatchPath $testBatch
-        Write-Output ('SELFTEST: started process ' + $testProcess.Id)
-
+        $testHost = Start-RedirectedBatch -BatchPath $testBatch
+        $testProcess = $testHost.Process
         $capturedLines = New-Object 'System.Collections.Generic.List[string]'
+
         $startSeen = $false
         $deadline = [DateTime]::UtcNow.AddSeconds(8)
         while (-not $startSeen -and [DateTime]::UtcNow -lt $deadline) {
-            Receive-ProcessOutput -Destination $capturedLines
+            Receive-ProcessOutput -ProcessHost $testHost -Destination $capturedLines
             $startSeen = (($capturedLines -join [Environment]::NewLine) -match 'SELFTEST-START')
             if ($testProcess.HasExited) { break }
             if (-not $startSeen) { Start-Sleep -Milliseconds 50 }
         }
 
         if (-not $startSeen) {
-            if (-not $testProcess.HasExited) {
-                $testProcess.Kill()
-            }
+            if (-not $testProcess.HasExited) { $testProcess.Kill() }
             $testProcess.WaitForExit()
-            $drainDeadline = [DateTime]::UtcNow.AddSeconds(3)
-            while (($null -ne $script:StdoutTask -or $null -ne $script:StderrTask) -and [DateTime]::UtcNow -lt $drainDeadline) {
-                Receive-ProcessOutput -Destination $capturedLines
-                Start-Sleep -Milliseconds 10
-            }
+            Receive-ProcessOutput -ProcessHost $testHost -Destination $capturedLines
             throw ('Test batch did not emit its start line. Exit code: ' + $testProcess.ExitCode + '. Output: ' + ($capturedLines -join [Environment]::NewLine))
         }
 
-        $testProcess.StandardInput.WriteLine('PING')
-        $testProcess.StandardInput.Flush()
+        $testHost.Send('PING')
         $deadline = [DateTime]::UtcNow.AddSeconds(15)
         while (-not $testProcess.HasExited -and [DateTime]::UtcNow -lt $deadline) {
-            Receive-ProcessOutput -Destination $capturedLines
+            Receive-ProcessOutput -ProcessHost $testHost -Destination $capturedLines
             Start-Sleep -Milliseconds 50
         }
 
@@ -111,16 +123,8 @@ if ($SelfTest) {
         }
 
         $testProcess.WaitForExit()
-        $drainDeadline = [DateTime]::UtcNow.AddSeconds(3)
-        while (($null -ne $script:StdoutTask -or $null -ne $script:StderrTask) -and [DateTime]::UtcNow -lt $drainDeadline) {
-            Receive-ProcessOutput -Destination $capturedLines
-            Start-Sleep -Milliseconds 10
-        }
-        Receive-ProcessOutput -Destination $capturedLines
-
+        Receive-ProcessOutput -ProcessHost $testHost -Destination $capturedLines
         $capturedText = $capturedLines -join [Environment]::NewLine
-        Write-Output ('SELFTEST: process exit code ' + $testProcess.ExitCode)
-        Write-Output ('SELFTEST: captured output: ' + $capturedText)
 
         if ($testProcess.ExitCode -ne 0 -or
             $capturedText -notmatch 'SELFTEST-START' -or
@@ -137,7 +141,7 @@ if ($SelfTest) {
         throw
     }
     finally {
-        if ($null -ne $testProcess) { $testProcess.Dispose() }
+        if ($null -ne $testHost) { $testHost.Dispose() }
         Remove-Item -LiteralPath $testFolder -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
@@ -161,8 +165,6 @@ try {
         exit 1
     }
 
-    $script:ServerProcess = $null
-    $script:CloseWhenStopped = $false
     $form = New-Object System.Windows.Forms.Form
     $form.Text = 'Minecraft Server Console'
     $form.StartPosition = 'CenterScreen'
@@ -294,11 +296,10 @@ try {
 
     function Send-ServerCommand {
         param([string]$CommandText)
-        if ($null -eq $script:ServerProcess -or $script:ServerProcess.HasExited) { return }
+        if ($null -eq $script:ServerHost -or $script:ServerHost.Process.HasExited) { return }
         if ([string]::IsNullOrWhiteSpace($CommandText)) { return }
         try {
-            $script:ServerProcess.StandardInput.WriteLine($CommandText)
-            $script:ServerProcess.StandardInput.Flush()
+            $script:ServerHost.Send($CommandText)
             Add-LogLine ('> ' + $CommandText)
             $commandBox.Clear()
         }
@@ -326,17 +327,22 @@ try {
     $timer.Interval = 100
     $timer.Add_Tick({
         $newLines = New-Object 'System.Collections.Generic.List[string]'
-        Receive-ProcessOutput -Destination $newLines
+        if ($null -ne $script:ServerHost) {
+            Receive-ProcessOutput -ProcessHost $script:ServerHost -Destination $newLines
+        }
         foreach ($line in $newLines) {
             Add-LogLine -Message $line
         }
 
-        if ($null -ne $script:ServerProcess -and $script:ServerProcess.HasExited -and
-            $null -eq $script:StdoutTask -and $null -eq $script:StderrTask) {
+        if ($null -ne $script:ServerProcess -and $script:ServerProcess.HasExited) {
             $script:ServerProcess.WaitForExit()
+            $finalLines = New-Object 'System.Collections.Generic.List[string]'
+            Receive-ProcessOutput -ProcessHost $script:ServerHost -Destination $finalLines
+            foreach ($line in $finalLines) { Add-LogLine -Message $line }
             $exitCode = $script:ServerProcess.ExitCode
             Add-LogLine ('[console] Server process exited with code ' + $exitCode + '.')
-            $script:ServerProcess.Dispose()
+            $script:ServerHost.Dispose()
+            $script:ServerHost = $null
             $script:ServerProcess = $null
             $timer.Stop()
             $commandBox.Enabled = $false
@@ -354,7 +360,8 @@ try {
         Add-LogLine ('Working directory: ' + $root)
         Add-LogLine 'Starting your original run-server.bat...'
         try {
-            $script:ServerProcess = Start-RedirectedBatch -BatchPath $serverBatch
+            $script:ServerHost = Start-RedirectedBatch -BatchPath $serverBatch
+            $script:ServerProcess = $script:ServerHost.Process
             Set-ConsoleStatus -Message 'RUNNING' -Color ([System.Drawing.Color]::FromArgb(100, 255, 130))
             $timer.Start()
             $commandBox.Focus()
