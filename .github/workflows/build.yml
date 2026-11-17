@@ -35,6 +35,17 @@ jobs:
         shell: powershell
         run: |
           Write-Host 'Starting the process smoke test.'
+          $diagInfo = New-Object System.Diagnostics.ProcessStartInfo
+          $diagInfo.FileName = $env:ComSpec
+          $diagInfo.Arguments = '/d /c echo CMD-SELFTEST'
+          $diagInfo.UseShellExecute = $false
+          $diagInfo.RedirectStandardOutput = $true
+          $diagInfo.RedirectStandardError = $true
+          $diagProcess = [System.Diagnostics.Process]::Start($diagInfo)
+          $diagOut = $diagProcess.StandardOutput.ReadToEnd()
+          $diagErr = $diagProcess.StandardError.ReadToEnd()
+          $diagProcess.WaitForExit()
+          Write-Host ('CMD diagnostic exit=' + $diagProcess.ExitCode + ' out=' + $diagOut + ' err=' + $diagErr)
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\ServerConsole.ps1 -SelfTest *> smoke-test.log
           $testExitCode = $LASTEXITCODE
           Get-Content .\smoke-test.log
