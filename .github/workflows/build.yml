@@ -34,9 +34,10 @@ jobs:
       - name: Smoke test batch process, output streams, and command input
         shell: powershell
         run: |
-          powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\ServerConsole.ps1 -SelfTest
+          Write-Host 'Starting the process smoke test.'
+          & .\ServerConsole.ps1 -SelfTest
           if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
+            throw ('Smoke test process returned exit code ' + $LASTEXITCODE)
           }
 
       - name: Create portable package
