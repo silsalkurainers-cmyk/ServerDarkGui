@@ -35,9 +35,11 @@ jobs:
         shell: powershell
         run: |
           Write-Host 'Starting the process smoke test.'
-          & .\ServerConsole.ps1 -SelfTest
-          if ($LASTEXITCODE -ne 0) {
-            throw ('Smoke test process returned exit code ' + $LASTEXITCODE)
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\ServerConsole.ps1 -SelfTest *> smoke-test.log
+          $testExitCode = $LASTEXITCODE
+          Get-Content .\smoke-test.log
+          if ($testExitCode -ne 0) {
+            throw ('Smoke test process returned exit code ' + $testExitCode)
           }
 
       - name: Create portable package
