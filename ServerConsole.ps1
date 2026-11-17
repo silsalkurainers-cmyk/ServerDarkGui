@@ -42,6 +42,8 @@ public sealed class ServerConsoleProcessHost
             throw new InvalidOperationException("Windows could not start the server batch file.");
 
         input = process.StandardInput;
+        input.WriteLine("");
+        input.Flush();
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
     }
@@ -82,6 +84,7 @@ if ($SelfTest) {
     $testFolder = Join-Path $env:TEMP ('ServerConsole-SmokeTest-' + [guid]::NewGuid().ToString('N'))
     [void](New-Item -ItemType Directory -Path $testFolder -Force)
     $testBatch = Join-Path $testFolder 'run-server.bat'
+    $testBootstrap = Join-Path $testFolder 'SERVER-CONSOLE-BOOTSTRAP.bat'
     $nl = [Environment]::NewLine
     $testContent = '@echo off' + $nl +
         'echo SELFTEST-START' + $nl +
@@ -90,10 +93,14 @@ if ($SelfTest) {
         'set /p received=' + $nl +
         'if "%received%"=="PING" exit /b 0' + $nl +
         'exit /b 1' + $nl
+    $bootstrapContent = '@echo off' + $nl +
+        'set /p _SERVER_CONSOLE_READY=' + $nl +
+        'call "%~dp0run-server.bat"' + $nl
     $testHost = $null
     try {
         [System.IO.File]::WriteAllText($testBatch, $testContent, [System.Text.Encoding]::ASCII)
-        $testHost = Start-RedirectedBatch -BatchPath $testBatch
+        [System.IO.File]::WriteAllText($testBootstrap, $bootstrapContent, [System.Text.Encoding]::ASCII)
+        $testHost = Start-RedirectedBatch -BatchPath $testBootstrap
         $testProcess = $testHost.Process
         $capturedLines = New-Object 'System.Collections.Generic.List[string]'
         $testHost.Send('PING')
@@ -140,8 +147,9 @@ try {
 
     $root = Split-Path -Parent $MyInvocation.MyCommand.Path
     $serverBatch = Join-Path $root 'run-server.bat'
-    if (-not (Test-Path -LiteralPath $serverBatch -PathType Leaf)) {
-        $message = 'The original server launcher was not found.' + [Environment]::NewLine + [Environment]::NewLine +
+    $bootstrapBatch = Join-Path $root 'SERVER-CONSOLE-BOOTSTRAP.bat'
+    if (-not (Test-Path -LiteralPath $serverBatch -PathType Leaf) -or -not (Test-Path -LiteralPath $bootstrapBatch -PathType Leaf)) {
+        $message = 'The original server launcher or console bootstrap file was not found.' + [Environment]::NewLine + [Environment]::NewLine +
             'Run INSTALL.bat in your server folder first. It preserves your original launcher as run-server.bat.'
         [System.Windows.Forms.MessageBox]::Show(
             $message, 'Server Console - Setup Required',
@@ -346,7 +354,7 @@ try {
         Add-LogLine ('Working directory: ' + $root)
         Add-LogLine 'Starting your original run-server.bat...'
         try {
-            $script:ServerHost = Start-RedirectedBatch -BatchPath $serverBatch
+            $script:ServerHost = Start-RedirectedBatch -BatchPath $bootstrapBatch
             $script:ServerProcess = $script:ServerHost.Process
             Set-ConsoleStatus -Message 'RUNNING' -Color ([System.Drawing.Color]::FromArgb(100, 255, 130))
             $timer.Start()
