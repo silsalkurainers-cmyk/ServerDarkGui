@@ -31,7 +31,7 @@ function Start-RedirectedBatch {
 }
 
 function Receive-ProcessOutput {
-    param([Parameter(Mandatory = $true)][System.Collections.Generic.List[string]]$Destination)
+    param([Parameter(Mandatory = $true)][AllowEmptyCollection()][System.Collections.Generic.List[string]]$Destination)
 
     if ($null -ne $script:StdoutTask -and $script:StdoutTask.IsCompleted) {
         $line = $script:StdoutTask.GetAwaiter().GetResult()
