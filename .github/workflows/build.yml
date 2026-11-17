@@ -1,0 +1,58 @@
+name: Build Server Dark GUI
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Download the Mixin compile-time API
+        run: |
+          mkdir -p build/deps
+          curl --fail --location --retry 3 \
+            "https://repo.maven.apache.org/maven2/net/fabricmc/sponge-mixin/0.17.3%2Bmixin.0.8.7/sponge-mixin-0.17.3%2Bmixin.0.8.7.jar" \
+            --output build/deps/sponge-mixin.jar
+
+      - name: Compile and package the mod
+        run: |
+          mkdir -p build/classes
+          find src/main/java -name "*.java" -print > build/sources.txt
+          javac --release 21 -proc:none -encoding UTF-8 \
+            -classpath build/deps/sponge-mixin.jar \
+            -d build/classes @build/sources.txt
+          cp -R src/main/resources/. build/classes/
+          jar --create --file build/server-dark-gui-1.0.0.jar -C build/classes .
+
+      - name: Upload the JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-dark-gui-1.0.0
+          path: build/server-dark-gui-1.0.0.jar
+          if-no-files-found: error
+
+      - name: Publish GitHub Release for version tags
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/server-dark-gui-1.0.0.jar
