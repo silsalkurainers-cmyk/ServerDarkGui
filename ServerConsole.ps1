@@ -7,7 +7,7 @@ function Start-RedirectedBatch {
     $script:OutputQueue = New-Object 'System.Collections.Concurrent.ConcurrentQueue[string]'
     $startInfo = New-Object System.Diagnostics.ProcessStartInfo
     $startInfo.FileName = $env:ComSpec
-    $startInfo.Arguments = '/d /s /c ""' + $BatchPath + '""'
+    $startInfo.Arguments = '/d /c ""' + $BatchPath + '""'
     $startInfo.WorkingDirectory = Split-Path -Parent $BatchPath
     $startInfo.UseShellExecute = $false
     $startInfo.CreateNoWindow = $true
@@ -51,6 +51,25 @@ if ($SelfTest) {
         [System.IO.File]::WriteAllText($testBatch, $testContent, [System.Text.Encoding]::ASCII)
         $testProcess = Start-RedirectedBatch -BatchPath $testBatch
         Write-Output ('SELFTEST: started process ' + $testProcess.Id)
+        $capturedLines = New-Object 'System.Collections.Generic.List[string]'
+        $startSeen = $false
+        $deadline = [DateTime]::UtcNow.AddSeconds(8)
+        while (-not $startSeen -and [DateTime]::UtcNow -lt $deadline) {
+            [string]$capturedLine = $null
+            while ($script:OutputQueue.TryDequeue([ref]$capturedLine)) {
+                $capturedLines.Add($capturedLine)
+                if ($capturedLine -match 'SELFTEST-START') { $startSeen = $true }
+                $capturedLine = $null
+            }
+            if ($testProcess.HasExited) {
+                $testProcess.WaitForExit()
+                throw ('Test batch exited before input with code ' + $testProcess.ExitCode + '. Output: ' + ($capturedLines -join [Environment]::NewLine))
+            }
+            if (-not $startSeen) { Start-Sleep -Milliseconds 50 }
+        }
+        if (-not $startSeen) {
+            throw ('Test batch did not emit its start line. Output: ' + ($capturedLines -join [Environment]::NewLine))
+        }
         $testProcess.StandardInput.WriteLine('PING')
         $testProcess.StandardInput.Flush()
         if (-not $testProcess.WaitForExit(15000)) {
@@ -59,7 +78,6 @@ if ($SelfTest) {
         }
         $testProcess.WaitForExit()
         Write-Output ('SELFTEST: process exit code ' + $testProcess.ExitCode)
-        $capturedLines = New-Object 'System.Collections.Generic.List[string]'
         [string]$capturedLine = $null
         while ($script:OutputQueue.TryDequeue([ref]$capturedLine)) {
             $capturedLines.Add($capturedLine)
