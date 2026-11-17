@@ -11,6 +11,11 @@ if not exist "RUN-CONSOLE.bat" (
     pause
     exit /b 1
 )
+if not exist "SERVER-CONSOLE-BOOTSTRAP.bat" (
+    echo ERROR: SERVER-CONSOLE-BOOTSTRAP.bat is missing.
+    pause
+    exit /b 1
+)
 if exist "run-server.bat" (
     echo ERROR: run-server.bat already exists. Nothing was changed; it may already be installed.
     pause
