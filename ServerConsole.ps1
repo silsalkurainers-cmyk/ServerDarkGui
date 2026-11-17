@@ -83,10 +83,11 @@ if ($SelfTest) {
     $nl = [Environment]::NewLine
     $testContent = '@echo off' + $nl +
         'echo SELFTEST-START' + $nl +
-        'set /p received=' + $nl +
-        'echo SELFTEST-COMMAND:%received%' + $nl +
+        'echo SELFTEST-SECOND' + $nl +
         'echo SELFTEST-STDERR 1>&2' + $nl +
-        'exit /b 0' + $nl
+        'set /p received=' + $nl +
+        'if "%received%"=="PING" exit /b 0' + $nl +
+        'exit /b 1' + $nl
     $testHost = $null
     try {
         [System.IO.File]::WriteAllText($testBatch, $testContent, [System.Text.Encoding]::ASCII)
@@ -128,7 +129,7 @@ if ($SelfTest) {
 
         if ($testProcess.ExitCode -ne 0 -or
             $capturedText -notmatch 'SELFTEST-START' -or
-            $capturedText -notmatch 'SELFTEST-COMMAND:PING' -or
+            $capturedText -notmatch 'SELFTEST-SECOND' -or
             $capturedText -notmatch 'SELFTEST-STDERR') {
             throw ('Smoke test failed. Exit code: ' + $testProcess.ExitCode + '. Output: ' + $capturedText)
         }
