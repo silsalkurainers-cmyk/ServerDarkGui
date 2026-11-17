@@ -27,7 +27,7 @@ public sealed class ServerConsoleProcessHost
         info.Arguments = "/d /c call \"" + batchPath + "\"";
         info.WorkingDirectory = Path.GetDirectoryName(batchPath);
         info.UseShellExecute = false;
-        info.CreateNoWindow = true;
+        info.CreateNoWindow = false;
         info.WindowStyle = ProcessWindowStyle.Hidden;
         info.RedirectStandardInput = true;
         info.RedirectStandardOutput = true;
