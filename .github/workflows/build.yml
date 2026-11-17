@@ -35,33 +35,6 @@ jobs:
         shell: powershell
         run: |
           Write-Host 'Starting the process smoke test.'
-          $diagInfo = New-Object System.Diagnostics.ProcessStartInfo
-          $diagInfo.FileName = $env:ComSpec
-          $diagInfo.Arguments = '/d /c echo CMD-SELFTEST'
-          $diagInfo.UseShellExecute = $false
-          $diagInfo.RedirectStandardOutput = $true
-          $diagInfo.RedirectStandardError = $true
-          $diagProcess = [System.Diagnostics.Process]::Start($diagInfo)
-          $diagOut = $diagProcess.StandardOutput.ReadToEnd()
-          $diagErr = $diagProcess.StandardError.ReadToEnd()
-          $diagProcess.WaitForExit()
-          Write-Host ('CMD diagnostic exit=' + $diagProcess.ExitCode + ' out=' + $diagOut + ' err=' + $diagErr)
-          $diagBatch = Join-Path $env:TEMP 'server-console-batch-diagnostic.bat'
-          [System.IO.File]::WriteAllText($diagBatch, '@echo off' + [Environment]::NewLine + 'echo BATCH-START' + [Environment]::NewLine + 'set /p incoming=' + [Environment]::NewLine + 'echo BATCH-INPUT:%incoming%' + [Environment]::NewLine + 'exit /b 0' + [Environment]::NewLine, [System.Text.Encoding]::ASCII)
-          $batchInfo = New-Object System.Diagnostics.ProcessStartInfo
-          $batchInfo.FileName = $env:ComSpec
-          $batchInfo.Arguments = '/d /c call "' + $diagBatch + '"'
-          $batchInfo.WorkingDirectory = $env:TEMP
-          $batchInfo.UseShellExecute = $false
-          $batchInfo.RedirectStandardInput = $true
-          $batchInfo.RedirectStandardOutput = $true
-          $batchInfo.RedirectStandardError = $true
-          $batchProcess = [System.Diagnostics.Process]::Start($batchInfo)
-          $batchProcess.StandardInput.WriteLine('PING')
-          $batchOut = $batchProcess.StandardOutput.ReadToEnd()
-          $batchErr = $batchProcess.StandardError.ReadToEnd()
-          $batchProcess.WaitForExit()
-          Write-Host ('Batch diagnostic exit=' + $batchProcess.ExitCode + ' out=' + $batchOut + ' err=' + $batchErr)
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\ServerConsole.ps1 -SelfTest *> smoke-test.log
           $testExitCode = $LASTEXITCODE
           Get-Content .\smoke-test.log
