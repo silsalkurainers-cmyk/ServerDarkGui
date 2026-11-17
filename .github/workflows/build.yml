@@ -42,7 +42,7 @@ jobs:
           $batchInfo.Arguments = '/d /c call "' + $diagBatch + '"'
           $batchInfo.WorkingDirectory = $env:TEMP
           $batchInfo.UseShellExecute = $false
-          $batchInfo.CreateNoWindow = $true
+          $batchInfo.CreateNoWindow = $false
           $batchInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
           $batchInfo.RedirectStandardInput = $true
           $batchInfo.RedirectStandardOutput = $true
