@@ -14,6 +14,7 @@ public sealed class ServerConsoleProcessHost
 {
     private readonly Process process;
     private readonly ConcurrentQueue<string> output;
+    private readonly StreamWriter input;
 
     public Process Process { get { return process; } }
     public ConcurrentQueue<string> Output { get { return output; } }
@@ -40,14 +41,15 @@ public sealed class ServerConsoleProcessHost
         if (!process.Start())
             throw new InvalidOperationException("Windows could not start the server batch file.");
 
+        input = process.StandardInput;
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
     }
 
     public void Send(string command)
     {
-        process.StandardInput.WriteLine(command);
-        process.StandardInput.Flush();
+        input.WriteLine(command);
+        input.Flush();
     }
 
     public void Dispose()
