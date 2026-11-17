@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "serverdarkgui",
+  "version": "1.0.0",
+  "name": "Server Dark GUI",
+  "description": "A near-black theme with green text for Minecraft's built-in dedicated-server GUI.",
+  "environment": "server",
+  "mixins": [
+    "serverdarkgui.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "26.2",
+    "java": ">=25"
+  }
+}
